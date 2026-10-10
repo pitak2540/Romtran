@@ -38,9 +38,9 @@ jobs:
         run: |
           set -o pipefail
           # python-for-android upgrades pip inside its build environment on every
-          # recipe; self-upgrading to the newest pip crashes mid-install, so keep
-          # pip on the series bundled with the Python it builds.
-          echo "pip<26" > "$RUNNER_TEMP/pip-constraints.txt"
+          # recipe; self-upgrading to pip 26.2+ crashes mid-install, and pip 25
+          # cannot install Android wheels, so hold pip at the 26.1 series.
+          echo "pip>=26,<26.2" > "$RUNNER_TEMP/pip-constraints.txt"
           export PIP_CONSTRAINT="$RUNNER_TEMP/pip-constraints.txt"
           buildozer android debug 2>&1 | tee "$RUNNER_TEMP/buildozer.log"
       - name: Report build error
