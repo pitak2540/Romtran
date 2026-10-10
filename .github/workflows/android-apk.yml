@@ -51,6 +51,11 @@ jobs:
             echo "::error title=${title}::${msg}"
           }
           annotate "Buildozer: error lines" "$(clean < "$log" | grep -iE 'error|exception|traceback|failed|not found|no such' | tail -n 25)"
+          first=$(clean < "$log" | grep -nE 'Traceback|error:' | head -n 1 | cut -d: -f1)
+          if [ -n "$first" ]; then
+            start=$(( first > 30 ? first - 30 : 1 ))
+            annotate "Buildozer: around first error" "$(clean < "$log" | sed -n "${start},$(( first + 25 ))p")"
+          fi
           annotate "Buildozer: last lines" "$(clean < "$log" | tail -n 35)"
       - uses: actions/upload-artifact@v4
         with:
