@@ -37,10 +37,11 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          # python-for-android upgrades pip inside its build environment on every
-          # recipe; self-upgrading to pip 26.2+ crashes mid-install, and pip 25
-          # cannot install Android wheels, so hold pip at the 26.1 series.
-          echo "pip>=26,<26.2" > "$RUNNER_TEMP/pip-constraints.txt"
+          # Workarounds for python-for-android's "install pure Python modules" step:
+          # - self-upgrading its build venv to pip 26.2+ crashes mid-install
+          # - charset-normalizer 3.5+ ships Android wheels that this step picks up
+          #   and then rejects as "not a supported wheel on this platform"
+          printf '%s\n' 'pip>=26,<26.2' 'charset-normalizer<3.5' > "$RUNNER_TEMP/pip-constraints.txt"
           export PIP_CONSTRAINT="$RUNNER_TEMP/pip-constraints.txt"
           buildozer android debug 2>&1 | tee "$RUNNER_TEMP/buildozer.log"
       - name: Report build error

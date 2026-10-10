@@ -5,7 +5,7 @@ package.domain = org.pbkcenter
 source.dir = .
 source.include_exts = py,kv,png,jpg,atlas,txt,json,ttf
 version = 0.1.0
-requirements = python3,kivy,pyjnius,charset-normalizer==3.4.4
+requirements = python3,kivy,pyjnius
 orientation = portrait
 fullscreen = 0
 android.api = 35
