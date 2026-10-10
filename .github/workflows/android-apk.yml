@@ -34,7 +34,24 @@ jobs:
           python -m pip install "buildozer>=1.5.0" "cython<3"
       - name: Build debug APK
         working-directory: android_app
-        run: buildozer android debug
+        shell: bash
+        run: |
+          set -o pipefail
+          buildozer android debug 2>&1 | tee "$RUNNER_TEMP/buildozer.log"
+      - name: Report build error
+        if: failure()
+        shell: bash
+        run: |
+          log="$RUNNER_TEMP/buildozer.log"
+          [ -f "$log" ] || exit 0
+          clean() { sed 's/\x1b\[[0-9;]*[A-Za-z]//g' | grep -vE '^[[:space:]]*$' | cut -c1-300; }
+          annotate() {
+            local title="$1" msg="$2"
+            msg="${msg//'%'/'%25'}"; msg="${msg//$'\r'/'%0D'}"; msg="${msg//$'\n'/'%0A'}"
+            echo "::error title=${title}::${msg}"
+          }
+          annotate "Buildozer: error lines" "$(clean < "$log" | grep -iE 'error|exception|traceback|failed|not found|no such' | tail -n 25)"
+          annotate "Buildozer: last lines" "$(clean < "$log" | tail -n 35)"
       - uses: actions/upload-artifact@v4
         with:
           name: romtran-android-debug-apk
