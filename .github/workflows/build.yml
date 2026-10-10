@@ -1,0 +1,105 @@
+name: Romtran Automated Build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    name: Test and build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: Romtran-Linux-x86_64
+          - os: windows-latest
+            artifact: Romtran-Windows-x86_64
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile Python files
+        run: python -m compileall -q src tests
+
+      - name: Run unit tests
+        env:
+          PYTHONPATH: src
+        run: pytest -q
+
+      - name: Build desktop application
+        run: >
+          pyinstaller --noconfirm --clean --windowed
+          --name Romtran --paths src src/romtran/main.py
+
+      - name: Archive executable (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd dist
+          zip -r ../Romtran-Linux-x86_64.zip Romtran
+
+      - name: Archive executable (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist/Romtran/* -DestinationPath Romtran-Windows-x86_64.zip
+
+      - name: Upload executable artifact (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: Romtran-Linux-x86_64.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload executable artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: Romtran-Windows-x86_64.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  source-bundle:
+    name: Package source code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Package source
+        run: |
+          mkdir -p source-bundle
+          cp -r src tests README.md requirements.txt source-bundle/
+          cd source-bundle
+          zip -r ../Romtran-source.zip .
+
+      - name: Upload source bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Romtran-source
+          path: Romtran-source.zip
+          if-no-files-found: error
+          retention-days: 14
