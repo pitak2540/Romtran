@@ -34,7 +34,40 @@ jobs:
           python -m pip install "buildozer>=1.5.0" "cython<3"
       - name: Build debug APK
         working-directory: android_app
-        run: buildozer android debug
+        shell: bash
+        run: |
+          set -o pipefail
+          # Workarounds for python-for-android's "install pure Python modules" step:
+          # - self-upgrading its build venv to pip 26.2+ crashes mid-install
+          # - charset-normalizer 3.5+ ships Android wheels that this step picks up
+          #   and then rejects as "not a supported wheel on this platform"
+          printf '%s\n' 'pip>=26,<26.2' 'charset-normalizer<3.5' > "$RUNNER_TEMP/pip-constraints.txt"
+          export PIP_CONSTRAINT="$RUNNER_TEMP/pip-constraints.txt"
+          buildozer android debug 2>&1 | tee "$RUNNER_TEMP/buildozer.log"
+      - name: Report build error
+        if: failure()
+        shell: bash
+        run: |
+          log="$RUNNER_TEMP/buildozer.log"
+          [ -f "$log" ] || exit 0
+          clean() { sed 's/\x1b\[[0-9;]*[A-Za-z]//g' | grep -vE '^[[:space:]]*$' | cut -c1-300; }
+          annotate() {
+            local title="$1" msg="$2"
+            msg="${msg//'%'/'%25'}"; msg="${msg//$'\r'/'%0D'}"; msg="${msg//$'\n'/'%0A'}"
+            echo "::error title=${title}::${msg}"
+          }
+          annotate "Buildozer: error lines" "$(clean < "$log" | grep -iE 'error|exception|traceback|failed|not found|no such' | tail -n 25)"
+          # Annotations are size-limited, so show the lead-up to the failure in chunks.
+          clean < "$log" | cut -c1-900 > "$RUNNER_TEMP/clean.log"
+          first=$(grep -nE 'Traceback \(most recent call last\)|^# Command failed' "$RUNNER_TEMP/clean.log" | head -n 1 | cut -d: -f1)
+          if [ -n "$first" ]; then
+            for i in 5 4 3 2 1 0; do
+              from=$(( first - (i + 1) * 4 )); [ "$from" -lt 1 ] && continue
+              echo "::warning title=Before error (part $((6 - i)) of 6)::$(sed -n "${from},$(( from + 3 ))p" "$RUNNER_TEMP/clean.log" | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+            done
+          fi
+          echo "::notice title=Buildozer: recent steps::$(grep -E '^\[INFO\]' "$RUNNER_TEMP/clean.log" | tail -n 25 | cut -c1-200 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+          annotate "Buildozer: last lines" "$(clean < "$log" | tail -n 35)"
       - uses: actions/upload-artifact@v4
         with:
           name: romtran-android-debug-apk
